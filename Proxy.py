@@ -1,14 +1,3 @@
-"""
-Proxy.py — Automatically fetch, test, apply, and rotate free proxies on Windows.
-
-Usage:
-    python Proxy.py              # fetch proxies, test them, apply to system
-    python Proxy.py --disable    # disable system proxy and exit
-
-Requires Administrator rights for full WinHTTP (netsh) coverage.
-WinInet (IE / Edge / Chrome / most apps) works without admin rights.
-"""
-
 import argparse
 import ctypes
 import subprocess
@@ -23,21 +12,21 @@ from fetcher import fetch_all_proxies
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 TARGET_URL        = "https://httpbin.org/ip"  # used to verify proxy is alive
-CHECK_TIMEOUT     = 6        # seconds — per-proxy test timeout
-MAX_LATENCY_MS    = 3000     # ms  — drop proxy if response time exceeds this
-MAX_WORKERS       = 50       # concurrent threads during bulk testing
-ROTATE_INTERVAL   = 300      # seconds — planned rotation interval (5 min)
-RELOAD_INTERVAL   = 3600     # seconds — re-fetch from online sources (1 hr)
-HEALTH_INTERVAL   = 30       # seconds — health-check polling interval
-MAX_INITIAL_TEST  = 300      # limit initial testing to first 300 proxies
-ACTIVE_PROXIES_FILE = "active_proxies.txt"  # live proxies file for Windows functions
-WORKING_LIST_FILE = "working_proxies.txt"   # legacy file (kept for compatibility)
+CHECK_TIMEOUT     = 6        # seconds 
+MAX_LATENCY_MS    = 3000     # ms
+MAX_WORKERS       = 50       # Concurrent threads
+ROTATE_INTERVAL   = 300      # seconds (5 min)
+RELOAD_INTERVAL   = 3600     # seconds (1 hr)
+HEALTH_INTERVAL   = 30       # seconds
+MAX_INITIAL_TEST  = 300      # Initial testing of Proxies
+ACTIVE_PROXIES_FILE = "active_proxies.txt"  # live proxies
+WORKING_LIST_FILE = "working_proxies.txt"   
 
 
 # ── Shared state (touched by main thread + health-check thread) ────────────────
 class _State:
     pool:           list[str]       = []
-    active:         list[str]       = []       # live proxies from background testing
+    active:         list[str]       = []       # More live proxies
     rotate_index:   int             = 0
     current:        str | None      = None
     last_reload:    float           = 0.0
@@ -51,10 +40,7 @@ _s = _State()
 # ── Proxy testing ──────────────────────────────────────────────────────────────
 
 def _test(host_port: str) -> tuple[str | None, float | None]:
-    """
-    Returns (host_port, latency_ms) when the proxy responds with HTTP 200.
-    Returns (None, None) on any failure.
-    """
+    
     url = f"http://{host_port}"
     prx = {"http": url, "https": url}
     try:
@@ -70,8 +56,7 @@ def _test(host_port: str) -> tuple[str | None, float | None]:
 
 def test_proxies_sequentially(candidates: list[str]) -> tuple[str | None, int]:
     """
-    Test proxies sequentially until finding one that works.
-    Returns (working_proxy, index_where_found).
+    Test proxies sequentially
     """
     if not candidates:
         return None, 0
@@ -88,11 +73,7 @@ def test_proxies_sequentially(candidates: list[str]) -> tuple[str | None, int]:
 
 
 def verify_remaining_proxies(candidates: list[str]) -> list[str]:
-    """
-    Concurrently test remaining proxies after initial sequential test.
-    Returns working proxies sorted fastest-first.
-    Saves results to files.
-    """
+    
     if not candidates:
         return []
 
@@ -122,10 +103,7 @@ def verify_remaining_proxies(candidates: list[str]) -> list[str]:
 
 
 def retest_working_proxies() -> None:
-    """
-    Retest all known working proxies to verify they still work.
-    Called after initial batch testing is complete.
-    """
+    
     with _s.lock:
         to_test = _s.active.copy() if _s.active else []
 
@@ -157,13 +135,12 @@ def retest_working_proxies() -> None:
 
 
 def _save_active_proxies(proxies: list[str]) -> None:
-    """Save active proxies to file for Windows functions to access."""
+    
     with open(ACTIVE_PROXIES_FILE, "w", encoding="utf-8") as fh:
         fh.writelines(p + "\n" for p in proxies)
 
 
 def _load_active_proxies() -> list[str]:
-    """Load active proxies from file."""
     try:
         with open(ACTIVE_PROXIES_FILE, "r", encoding="utf-8") as fh:
             return [line.strip() for line in fh if line.strip()]
@@ -172,7 +149,7 @@ def _load_active_proxies() -> list[str]:
 
 
 def _save_working_list(proxies: list[str]) -> None:
-    """Save working proxies (legacy file for compatibility)."""
+    
     with open(WORKING_LIST_FILE, "w", encoding="utf-8") as fh:
         fh.writelines(p + "\n" for p in proxies)
 
@@ -222,9 +199,7 @@ def _winhttp_reset() -> None:
 
 def apply_proxy(host_port: str) -> None:
     """
-    Apply proxy atomically: WinInet registry first (instant effect for most apps),
-    then WinHTTP.  New proxy is active before old one is discarded, so there is
-    no gap where traffic has no proxy.
+    Applying proxy atomically
     """
     _reg_enable(host_port)   # takes effect immediately for WinInet apps
     _winhttp_set(host_port)  # WinHTTP / background services
@@ -244,8 +219,6 @@ def disable_proxy() -> None:
 def _health_thread() -> None:
     """
     Runs as a daemon thread.
-    Every HEALTH_INTERVAL seconds it tests the active proxy.
-    Sets _s.failover if the proxy is dead or too slow — the main loop
     wakes up instantly and switches to the next proxy.
     """
     while True:
