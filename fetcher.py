@@ -1,15 +1,3 @@
-"""
-fetcher.py — Downloads free HTTP proxy lists from multiple public sources concurrently.
-
-This module fetches proxy lists from public GitHub repositories.
-The Proxy.py main program will:
-  1. Fetch all proxies from these sources (deduplicated)
-  2. Test only the first 300 proxies for speed
-  3. Save working proxies to active_proxies.txt for Windows functions
-  4. Continuously test remaining proxies in background threads
-  5. Update active_proxies.txt to prevent it from becoming empty
-"""
-
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
